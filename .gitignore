@@ -1,11 +1,12 @@
 # Ignore Play! working directory #
+.idea
 bin/
 /db
 .eclipse
 /lib/
 /logs/
 /modules
-/project/target
+/project
 /target
 tmp/
 test-result
