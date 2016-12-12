@@ -52,12 +52,13 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
       * )
       */
     val table = "samples"
+    val tableColumns  = SomeColumns("id", "sample_number")
 
-    println("Converting MongoRDD to SparkRDD with CassandraContext...")
+    println("Converting MongoRDD to CassandraRDD with CassandraContext...")
     val samplesRDD = cassandraRDDFromMongoRDD(samples, cassandraSparkContext)
 
     println("Saving RDD to cassandra table...")
-    samplesRDD.saveToCassandra(keySpace, table, SomeColumns("id", "sample_number"))
+    samplesRDD.saveToCassandra(keySpace, table, tableColumns)
 
     val cassandraSamples = cassandraSparkContext.cassandraTable(keySpace, table)
 
@@ -92,10 +93,10 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
   def cassandraRDDFromMongoRDD(mongoRDD: MongoRDD[Document], sc: SparkContext): RDD[(String, Int)] = {
 
     val count = mongoRDD.count().toInt //converting to Int
-    val rddList = mongoRDD.toLocalIterator.toList //converting mongoRDD to List
+    val rddList = mongoRDD.toLocalIterator.toIndexedSeq //converting mongoRDD to Seq
     var document = rddList.head
     sc.parallelize(0 until count).map{ index =>
-      document = rddList.apply(index.toInt)
+      document = rddList.apply(index)
       (document.getString("_id"), document.getInteger("sample_number"))
     }
 

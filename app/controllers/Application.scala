@@ -1,6 +1,6 @@
 package controllers
 
-import migrations.SimpleMigration
+import migrations.{ComplexMigration, SimpleMigration}
 import play.api._
 import play.api.mvc._
 
@@ -11,7 +11,7 @@ class Application extends Controller {
 
   def index = Action {
     Future{
-      SimpleMigration.main(new Array[String](0))
+      ComplexMigration.main(new Array[String](0))
     }
     Ok(views.html.index("Check the Console..!"))
   }
