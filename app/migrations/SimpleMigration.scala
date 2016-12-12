@@ -93,7 +93,7 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
   def cassandraRDDFromMongoRDD(mongoRDD: MongoRDD[Document], sc: SparkContext): RDD[(String, Int)] = {
 
     val count = mongoRDD.count().toInt //converting to Int
-    val rddList = mongoRDD.toLocalIterator.toIndexedSeq //converting mongoRDD to Seq
+    val rddList = mongoRDD.collect() //converting mongoRDD to Array
     var document = rddList.head
     sc.parallelize(0 until count).map{ index =>
       document = rddList.apply(index)

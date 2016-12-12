@@ -88,7 +88,8 @@ object ComplexMigration {
       */
     val table = "users"
 
-    val mongoCassandraKeyMapper = Map[String, String](
+
+    val mongoCassandraKeyMapper = Map[String, String]( //FIXME: use it properly
       "_id" -> "id",
       "sdk_version" -> "sdk_version",
 
@@ -97,7 +98,7 @@ object ComplexMigration {
       "app_info.app_version" -> "app_version",
       "app_info.app_mode" -> "app_mode",
 
-      "device_info.device_uuid" -> "device_info.device_uuid",
+      "device_info.device_uuid" -> "device_uuid",
       "device_info.custom_user_id" -> "custom_user_id",
       "device_info.hardware_model" -> "hardware_model",
       "device_info.os_version" -> "os_version",
@@ -109,20 +110,24 @@ object ComplexMigration {
       "user_info.stateId" -> "stateId"
     )
 
-    val tableColumns = SomeColumns(mongoCassandraKeyMapper.values.toList.mkString(","))
+    val tableColumns = SomeColumns("id", "sdk_version", "app_bundle_id", "app_name",  "app_version", "app_mode", "device_uuid","custom_user_id",  "hardware_model", "os_version", "device_height", "device_width", "countryid", "langid", "stateid")
 
     println("Converting MongoRDD to CassandraRDD with CassandraContext...")
-    val usersRDD = cassandraRDDFromMongoRDD(users, cassandraSparkContext, mongoCassandraKeyMapper)
-
+    try {
+      cassandraRDDFromMongoRDD(users, cassandraSparkContext).saveToCassandra(keySpace, table, tableColumns)
+    } catch {
+      case e: Exception => Seq[String]()
+        println("Exception raised....> " + e)
+      case _ => println("****************Exception*****************")
+    }
     println("Saving RDD to cassandra table...")
-    usersRDD.saveToCassandra(keySpace, table, tableColumns)
 
-    val cassandraSamples = cassandraSparkContext.cassandraTable(keySpace, table)
+    val cassandraUsers = cassandraSparkContext.cassandraTable(keySpace, table)
 
     println("****************From Cassandra Spark Context*****************")
-    println("NO: of User Records inserted:: " + cassandraSamples.count())
+    println("NO: of User Records inserted:: " + cassandraUsers.count())
 
-    println("User Record:: " + cassandraSamples.first)
+    println("User Record:: " + cassandraUsers.first)
 
   }
 
@@ -132,16 +137,33 @@ object ComplexMigration {
     * @param sc cassandra Context
     * @return
     */
-  def cassandraRDDFromMongoRDD(mongoRDD: MongoRDD[Document], sc: SparkContext, keyMapper: Map[String, String]): RDD[(_)] = {
+  def cassandraRDDFromMongoRDD(mongoRDD: MongoRDD[Document],
+                               sc: SparkContext):
+  RDD[(String, Float, String, String, String, String, String, String, String, String, Int, Int, String, String, String)] = {
 
     val count = mongoRDD.count().toInt //converting to Int FIXME:
-    val rddList = mongoRDD.toLocalIterator.toIndexedSeq //converting mongoRDD to Seq
+    val rddList = mongoRDD.collect() //converting mongoRDD to Array
     var document = rddList.head
     sc.parallelize(0 until count).map{ index =>
       document = rddList.apply(index)
-      keyMapper.keySet.foreach(mongoKey => {
-        document.get(mongoKey)
-      })
+      println("doc" + document.toJson)
+      ( //FIXME: need elegant code here to reduce this boilerplate
+        document.getString("_id"),
+        document.getDouble("sdk_version").toFloat,
+        document.getString("app_info.bundle_id"),
+        document.getString("app_info.app_name"),
+        document.getString("app_info.app_version"),
+        document.getString("appInfo.app_mode"),
+        document.getString("device_info.device_uuid"),
+        document.getString("device_info.custom_user_id"),
+        document.getString("device_info.hardware_model"),
+        document.getString("device_info.os_version"),
+        document.getInteger("device_info.device_dimensions.height"),
+        document.getInteger("device_info.device_dimensions.width"),
+        document.getString("user_info.countryId"),
+        document.getString("user_info.langId"),
+        document.getString("user_info.stateId")
+      )
     }
 
   }
