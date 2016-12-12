@@ -43,6 +43,14 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
 
     //Migration of samples collection to Cassandra Samples Table
     val keySpace = "jyothi"
+    /**
+      * @ query to create table
+      * samples table Schema
+      * CREATE TABLE samples (
+      *   id text PRIMARY KEY,
+      *   sample_number int
+      * )
+      */
     val table = "samples"
 
     println("Converting MongoRDD to SparkRDD with CassandraContext...")
