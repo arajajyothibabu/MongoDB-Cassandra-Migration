@@ -3,16 +3,16 @@ package migrations
 import com.datastax.spark.connector.SomeColumns
 import com.mongodb.spark.MongoSpark
 import com.mongodb.spark.rdd.MongoRDD
-import migrations.SimpleMigration.{getCassandraSparkContext, getMongoSparkContext}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bson.Document
 import com.datastax.spark.connector._
+import utils.HybridSparkContext
 
 /**
   * Created by jyothi on 12/12/16.
   */
-object ComplexMigration {
+object ComplexMigration extends HybridSparkContext{
 
   def main(args: Array[String]): Unit = {
     val db = "jyothi"
@@ -46,14 +46,11 @@ object ComplexMigration {
       */
     val collection = "users"
 
-    println("getting Mongo Spark Context")
-    val mongoSparkContext = getMongoSparkContext(db, collection) // uses default host
-
-    println("getting Cassandra Spark Context")
-    val cassandraSparkContext = getCassandraSparkContext() //uses default host
+    println("getting Hybrid Spark Context")
+    val sparkContext = getHybridSparkContext(db, collection) // uses default host
 
     println("Retrieving data from Mongo...")
-    val users = MongoSpark.load(mongoSparkContext)
+    val users = MongoSpark.load(sparkContext)
 
     println("****************From Mongo Spark Context*****************")
     println("NO: of User Records:: " + users.count())
@@ -110,19 +107,33 @@ object ComplexMigration {
       "user_info.stateId" -> "stateId"
     )
 
-    val tableColumns = SomeColumns("id", "sdk_version", "app_bundle_id", "app_name",  "app_version", "app_mode", "device_uuid","custom_user_id",  "hardware_model", "os_version", "device_height", "device_width", "countryid", "langid", "stateid")
+    val tableColumns = SomeColumns(
+      "id",
+      "sdk_version",
+      "app_bundle_id",
+      "app_name",
+      "app_version",
+      "app_mode",
+      "device_uuid",
+      "custom_user_id",
+      "hardware_model",
+      "os_version",
+      "device_height",
+      "device_width",
+      "countryid",
+      "langid",
+      "stateid"
+    )
 
-    println("Converting MongoRDD to CassandraRDD with CassandraContext...")
     try {
-      cassandraRDDFromMongoRDD(users, cassandraSparkContext).saveToCassandra(keySpace, table, tableColumns)
+      saveRDDToCassandra(users, sparkContext, keySpace, table, tableColumns)
     } catch {
-      case e: Exception => Seq[String]()
-        println("Exception raised....> " + e)
-      case _ => println("****************Exception*****************")
+      case e: Exception => Seq[String](); println("Exception raised....> " + e)
+      case _ => println("****************Other Exception*****************")
     }
     println("Saving RDD to cassandra table...")
 
-    val cassandraUsers = cassandraSparkContext.cassandraTable(keySpace, table)
+    val cassandraUsers = sparkContext.cassandraTable(keySpace, table)
 
     println("****************From Cassandra Spark Context*****************")
     println("NO: of User Records inserted:: " + cassandraUsers.count())
@@ -137,35 +148,32 @@ object ComplexMigration {
     * @param sc cassandra Context
     * @return
     */
-  def cassandraRDDFromMongoRDD(mongoRDD: MongoRDD[Document],
-                               sc: SparkContext):
-  RDD[(String, Float, String, String, String, String, String, String, String, String, Int, Int, String, String, String)] = {
+  def saveRDDToCassandra(mongoRDD: MongoRDD[Document], sc: SparkContext, keySpace: String, table: String, tableColumns: SomeColumns) {
 
-    val count = mongoRDD.count().toInt //converting to Int FIXME:
-    val rddList = mongoRDD.collect() //converting mongoRDD to Array
-    var document = rddList.head
-    sc.parallelize(0 until count).map{ index =>
-      document = rddList.apply(index)
-      println("doc" + document.toJson)
-      ( //FIXME: need elegant code here to reduce this boilerplate
+    val emptyDocument = Document.parse("{}")
+    mongoRDD.map(document => { //FIXME: need elegant code here to reduce this boilerplate
+      val appInfo = document.getOrDefault("app_info", emptyDocument).asInstanceOf[Document]
+      val deviceInfo = document.getOrDefault("device_info", emptyDocument).asInstanceOf[Document]
+      val userInfo = document.getOrDefault("user_info", emptyDocument).asInstanceOf[Document]
+      val deviceDimensions = deviceInfo.getOrDefault("device_dimensions", emptyDocument).asInstanceOf[Document]
+      (
         document.getString("_id"),
         document.getDouble("sdk_version").toFloat,
-        document.getString("app_info.bundle_id"),
-        document.getString("app_info.app_name"),
-        document.getString("app_info.app_version"),
-        document.getString("appInfo.app_mode"),
-        document.getString("device_info.device_uuid"),
-        document.getString("device_info.custom_user_id"),
-        document.getString("device_info.hardware_model"),
-        document.getString("device_info.os_version"),
-        document.getInteger("device_info.device_dimensions.height"),
-        document.getInteger("device_info.device_dimensions.width"),
-        document.getString("user_info.countryId"),
-        document.getString("user_info.langId"),
-        document.getString("user_info.stateId")
+        appInfo.getString("bundle_id"),
+        appInfo.getString("app_name"),
+        appInfo.getString("app_version"),
+        appInfo.getString("app_mode"),
+        deviceInfo.getString("device_uuid"),
+        deviceInfo.getString("custom_user_id"),
+        deviceInfo.getString("hardware_model"),
+        deviceInfo.getString("os_version"),
+        deviceDimensions.getInteger("height"),
+        deviceDimensions.getInteger("width"),
+        userInfo.getString("countryId"),
+        userInfo.getString("langId"),
+        userInfo.getString("stateId")
       )
-    }
-
+    }).saveToCassandra(keySpace, table, tableColumns)
   }
 
 }

@@ -4,7 +4,7 @@ import com.mongodb.spark.MongoSpark
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.bson.Document
-import utils.{CassandraSparkContext, MongoSparkContext}
+import utils.{CassandraSparkContext, HybridSparkContext, MongoSparkContext}
 import com.datastax.spark.connector._
 import com.mongodb.spark.rdd.MongoRDD
 
@@ -14,7 +14,7 @@ import com.mongodb.spark.rdd.MongoRDD
 /**
   * Sample Migration with sample  data
   */
-object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
+object SimpleMigration extends HybridSparkContext{
 
   def main(args: Array[String]): Unit = {
     val db = "jyothi"
@@ -24,17 +24,14 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
       */
     val collection = "samples"
 
-    println("getting Mongo Spark Context")
-    val mongoSparkContext = getMongoSparkContext(db, collection) // uses default host
-
-    println("getting Cassandra Spark Context")
-    val cassandraSparkContext = getCassandraSparkContext() //uses default host
+    println("getting Hybrid Spark Context")
+    val sparkContext = getHybridSparkContext(db, collection) // uses default host
 
     println("Saving random data to mongo...")
-    MongoSpark.save(getRandomRecords(mongoSparkContext, 1000)) // saving 1000 random documents
+    MongoSpark.save(getRandomRecords(sparkContext, 1000)) // saving 1000 random documents
 
     println("Retrieving data from Mongo...")
-    val samples = MongoSpark.load(mongoSparkContext)
+    val samples = MongoSpark.load(sparkContext)
 
     println("****************From Mongo Spark Context*****************")
     println("NO: of Sample Records inserted:: " + samples.count())
@@ -55,12 +52,12 @@ object SimpleMigration extends MongoSparkContext with CassandraSparkContext{
     val tableColumns  = SomeColumns("id", "sample_number")
 
     println("Converting MongoRDD to CassandraRDD with CassandraContext...")
-    val samplesRDD = cassandraRDDFromMongoRDD(samples, cassandraSparkContext)
+    val samplesRDD = cassandraRDDFromMongoRDD(samples, sparkContext)
 
     println("Saving RDD to cassandra table...")
     samplesRDD.saveToCassandra(keySpace, table, tableColumns)
 
-    val cassandraSamples = cassandraSparkContext.cassandraTable(keySpace, table)
+    val cassandraSamples = sparkContext.cassandraTable(keySpace, table)
 
     println("****************From Cassandra Spark Context*****************")
     println("NO: of Sample Records inserted:: " + cassandraSamples.count())

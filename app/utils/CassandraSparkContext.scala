@@ -5,6 +5,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 /**
   * Created by jyothi on 11/12/16.
   */
+@deprecated
 trait CassandraSparkContext {
 
   /**
